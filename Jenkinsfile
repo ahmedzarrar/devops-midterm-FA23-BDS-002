@@ -17,6 +17,27 @@ sleep 5
 curl -sf http://localhost:8000/metrics'''
       }
     }
+    stage('Push to Docker Hub') {
+      steps {
+        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+          timeout(time: 3, unit: 'MINUTES') {
+            withCredentials([usernamePassword(credentialsId: 'dockerhub-creds', usernameVariable: 'DH_USER', passwordVariable: 'DH_PASS')]) {
+              sh '''
+                set +x
+                trap 'docker logout' EXIT
+                SHORT=$(echo "$GIT_COMMIT" | cut -c1-7)
+                REPO="$DH_USER/midterm-fa23-bds-002"
+                echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin
+                docker tag $IMAGE:latest $REPO:latest
+                docker tag $IMAGE:latest $REPO:$SHORT
+                docker push $REPO:latest
+                docker push $REPO:$SHORT
+              '''
+            }
+          }
+        }
+      }
+    }
   }
   post {
     always {
