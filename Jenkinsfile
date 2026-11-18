@@ -20,10 +20,18 @@ curl -sf http://localhost:8000/metrics'''
   }
   post {
     always {
-      mail to: 'qasimalik@gmail.com',
-           from: 'YOUR_SENDER@gmail.com',
-           subject: "[${env.REG}] ${env.JOB_NAME} #${env.BUILD_NUMBER} ${currentBuild.currentResult}",
-           body: "Reg no: ${env.REG}\nResult: ${currentBuild.currentResult}\nBuild: ${env.BUILD_URL}"
+      script {
+        def to = 'qasimalik@gmail.com'
+        try {
+          def committer = sh(script: 'git log -1 --pretty=format:%ae', returnStdout: true).trim()
+          if (committer && !committer.contains('noreply') && !to.contains(committer)) {
+            to += ",${committer}"
+          }
+        } catch (e) { echo "could not read committer: ${e}" }
+        mail to: to,
+             subject: "[${env.REG}] ${env.JOB_NAME} #${env.BUILD_NUMBER} ${currentBuild.currentResult}",
+             body: "Reg no: ${env.REG}\nResult: ${currentBuild.currentResult}\nBuild: ${env.BUILD_URL}"
+      }
     }
   }
 }
