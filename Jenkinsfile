@@ -13,8 +13,11 @@ pipeline {
       steps {
         sh '''docker rm -f midterm-app || true
 docker run -d --name midterm-app --restart unless-stopped -p 8000:8000 $IMAGE:latest
-sleep 5
-curl -sf http://localhost:8000/metrics'''
+for i in $(seq 1 15); do
+  curl -sf http://localhost:8000/metrics && exit 0
+  sleep 2
+done
+exit 1'''
       }
     }
     stage('Push to Docker Hub') {
@@ -42,16 +45,21 @@ curl -sf http://localhost:8000/metrics'''
   post {
     always {
       script {
-        def to = 'qasimalik@gmail.com'
+        def emails = [] as Set
         try {
-          def committer = sh(script: 'git log -1 --pretty=format:%ae', returnStdout: true).trim()
-          if (committer && !committer.contains('noreply') && !to.contains(committer)) {
-            to += ",${committer}"
-          }
-        } catch (e) { echo "could not read committer: ${e}" }
-        mail to: to,
-             subject: "[${env.REG}] ${env.JOB_NAME} #${env.BUILD_NUMBER} ${currentBuild.currentResult}",
-             body: "Reg no: ${env.REG}\nResult: ${currentBuild.currentResult}\nBuild: ${env.BUILD_URL}"
+          sh(script: 'git log -1 --pretty=format:%ae%n%ce', returnStdout: true)
+            .trim().split('\n').each { e ->
+              e = e.trim()
+              if (e && !e.contains('noreply')) { emails << e }
+            }
+        } catch (err) { echo "could not read committer: ${err}" }
+        if (emails) {
+          mail to: emails.join(','),
+               subject: "[${env.REG}] ${env.JOB_NAME} #${env.BUILD_NUMBER} ${currentBuild.currentResult}",
+               body: "Reg no: ${env.REG}\nResult: ${currentBuild.currentResult}\nBuild: ${env.BUILD_URL}"
+        } else {
+          echo 'No usable committer email found, no mail sent'
+        }
       }
     }
   }
